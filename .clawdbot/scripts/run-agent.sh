@@ -22,25 +22,33 @@ mkdir -p "$(dirname "$LOG_FILE")"
 PROMPT_CONTENT="$(cat "$PROMPT_FILE")"
 START_TS="$(date '+%Y-%m-%d %H:%M:%S')"
 
-echo "[$START_TS] task=$TASK_ID agent=$AGENT model=$MODEL reasoning=$REASONING" | tee -a "$LOG_FILE"
+echo "[$START_TS] task=$TASK_ID agent=$AGENT model=$MODEL reasoning=$REASONING" >> "$LOG_FILE"
+
+run_with_tty_log() {
+  local -a cmd=("$@")
+  if command -v script >/dev/null 2>&1; then
+    # macOS style: script -aq <logfile> <command> [args...]
+    script -aq "$LOG_FILE" "${cmd[@]}"
+    return $?
+  fi
+
+  # fallback: no pseudo tty, may fail for interactive CLIs but keeps execution path
+  "${cmd[@]}" >> "$LOG_FILE" 2>&1
+  return $?
+}
 
 set +e
 case "$AGENT" in
   codex)
-    codex --model "$MODEL" \
-      -c "model_reasoning_effort=$REASONING" \
-      --dangerously-bypass-approvals-and-sandbox \
-      "$PROMPT_CONTENT" 2>&1 | tee -a "$LOG_FILE"
-    EXIT_CODE=${PIPESTATUS[0]}
+    run_with_tty_log codex exec --model "$MODEL" -c "model_reasoning_effort=$REASONING" --dangerously-bypass-approvals-and-sandbox "$PROMPT_CONTENT"
+    EXIT_CODE=$?
     ;;
   claude)
-    claude --model "$MODEL" \
-      --dangerously-skip-permissions \
-      -p "$PROMPT_CONTENT" 2>&1 | tee -a "$LOG_FILE"
-    EXIT_CODE=${PIPESTATUS[0]}
+    run_with_tty_log claude --model "$MODEL" --dangerously-skip-permissions -p "$PROMPT_CONTENT"
+    EXIT_CODE=$?
     ;;
   *)
-    echo "Unsupported agent: $AGENT (expected codex|claude)" | tee -a "$LOG_FILE"
+    echo "Unsupported agent: $AGENT (expected codex|claude)" >> "$LOG_FILE"
     EXIT_CODE=2
     ;;
 esac
