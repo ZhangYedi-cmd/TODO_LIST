@@ -72,7 +72,7 @@ if [[ ! "$AGENT" =~ ^(codex|claude)$ ]]; then
   exit 1
 fi
 
-TASK_SLUG="$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9_-' '-')"
+TASK_SLUG="$(printf '%s' "$TASK_ID" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9_-' '-' | sed 's/^-*//; s/-*$//')"
 if [[ -z "$TASK_SLUG" ]]; then
   echo "Invalid --id value: $TASK_ID" >&2
   exit 1
