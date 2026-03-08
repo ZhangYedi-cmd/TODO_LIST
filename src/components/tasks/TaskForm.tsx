@@ -15,42 +15,53 @@ export const TaskForm = ({ mode, initialDraft, onSubmit, onCancel }: TaskFormPro
   const [draft, setDraft] = useState<TaskDraft>(initialDraft);
   const [error, setError] = useState<string>("");
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
+  const submit = () => {
     if (!draft.title.trim()) {
       setError("Title is required.");
       return;
     }
-
-    onSubmit({
-      ...draft,
-      dueDate: draft.dueDate || undefined,
-    });
-
+    onSubmit({ ...draft, dueDate: draft.dueDate || undefined });
     if (mode === "create") {
       setDraft(initialDraft);
     }
     setError("");
   };
 
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    submit();
+  };
+
+  const handleFormKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      event.preventDefault();
+      submit();
+    }
+    if (event.key === "Escape" && onCancel) {
+      onCancel();
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <form
+      onSubmit={handleSubmit}
+      onKeyDown={handleFormKeyDown}
+      className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+    >
       <div>
         <label htmlFor={`task-title-${mode}`} className="mb-1 block text-sm font-medium text-slate-700">
           Title
         </label>
         <input
           id={`task-title-${mode}`}
+          autoFocus
           value={draft.title}
           onChange={(event) => {
-            if (error) {
-              setError("");
-            }
+            if (error) setError("");
             setDraft((prev) => ({ ...prev, title: event.target.value }));
           }}
           placeholder="What needs to be done?"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none ring-0 transition focus:border-slate-500"
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-500"
         />
       </div>
 
@@ -60,13 +71,14 @@ export const TaskForm = ({ mode, initialDraft, onSubmit, onCancel }: TaskFormPro
           className="mb-1 block text-sm font-medium text-slate-700"
         >
           Description
+          <span className="ml-1 font-normal text-slate-400">(optional)</span>
         </label>
         <textarea
           id={`task-description-${mode}`}
           value={draft.description}
           onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
-          placeholder="Optional details"
-          rows={3}
+          placeholder="Add details…"
+          rows={2}
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-500"
         />
       </div>
@@ -106,7 +118,7 @@ export const TaskForm = ({ mode, initialDraft, onSubmit, onCancel }: TaskFormPro
           >
             {TASK_PRIORITIES.map((priority) => (
               <option key={priority} value={priority}>
-                {priority}
+                {priority === "P1" ? "P1 — High" : priority === "P2" ? "P2 — Medium" : "P3 — Low"}
               </option>
             ))}
           </select>
@@ -144,6 +156,9 @@ export const TaskForm = ({ mode, initialDraft, onSubmit, onCancel }: TaskFormPro
             Cancel
           </button>
         ) : null}
+        <span className="ml-auto text-xs text-slate-400">
+          {mode === "edit" ? "Esc to cancel · " : ""}⌘↵ to submit
+        </span>
       </div>
     </form>
   );

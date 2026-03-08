@@ -13,7 +13,20 @@ interface TaskFiltersBarProps {
   onChange: (nextFilters: TaskFilters) => void;
 }
 
+const CLEARED_FILTERS: TaskFilters = {
+  query: "",
+  status: "all",
+  priority: "all",
+  dueBucket: "all",
+};
+
 export const TaskFiltersBar = ({ filters, onChange }: TaskFiltersBarProps) => {
+  const hasActiveFilters =
+    filters.query !== "" ||
+    filters.status !== "all" ||
+    filters.priority !== "all" ||
+    filters.dueBucket !== "all";
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
@@ -25,7 +38,7 @@ export const TaskFiltersBar = ({ filters, onChange }: TaskFiltersBarProps) => {
             id="task-search"
             value={filters.query}
             onChange={(event) => onChange({ ...filters, query: event.target.value })}
-            placeholder="Search title or description"
+            placeholder="Search title or description…"
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-500"
           />
         </div>
@@ -73,7 +86,7 @@ export const TaskFiltersBar = ({ filters, onChange }: TaskFiltersBarProps) => {
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         {Object.entries(DUE_BUCKET_LABELS).map(([bucket, label]) => {
           const active = filters.dueBucket === bucket;
           return (
@@ -96,6 +109,16 @@ export const TaskFiltersBar = ({ filters, onChange }: TaskFiltersBarProps) => {
             </button>
           );
         })}
+
+        {hasActiveFilters ? (
+          <button
+            type="button"
+            onClick={() => onChange(CLEARED_FILTERS)}
+            className="ml-auto rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-500 transition hover:border-slate-500 hover:text-slate-700"
+          >
+            Clear filters
+          </button>
+        ) : null}
       </div>
     </section>
   );

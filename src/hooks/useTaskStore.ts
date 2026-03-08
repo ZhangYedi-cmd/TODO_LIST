@@ -25,7 +25,12 @@ export const useTaskStore = () => {
       return;
     }
 
-    window.localStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(state.tasks));
+    try {
+      window.localStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(state.tasks));
+    } catch {
+      // localStorage may be unavailable (quota exceeded, private browsing restrictions, etc.)
+      // Data will remain in-memory for the current session.
+    }
   }, [state.tasks, hasHydrated]);
 
   return {
