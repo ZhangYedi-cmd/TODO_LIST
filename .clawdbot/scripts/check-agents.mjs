@@ -75,6 +75,21 @@ function isSessionAlive(sessionName) {
   return p.status === 0;
 }
 
+function readLastExitCodeFromLog(taskId) {
+  const logPath = path.join(repoRoot, '.clawdbot', 'logs', `${taskId}.log`);
+  if (!fs.existsSync(logPath)) return null;
+
+  try {
+    const content = fs.readFileSync(logPath, 'utf8');
+    const matches = [...content.matchAll(/exit_code=(\d+)/g)];
+    if (matches.length === 0) return null;
+    const code = Number(matches[matches.length - 1][1]);
+    return Number.isNaN(code) ? null : code;
+  } catch {
+    return null;
+  }
+}
+
 function notify(text) {
   if (!hasCmd('openclaw')) return;
   run('openclaw', ['system', 'event', '--text', text, '--mode', 'now']);
@@ -112,8 +127,14 @@ for (const task of registry.tasks) {
       note = 'PR exists, waiting CI';
     }
   } else if (['running', 'retrying', 'waiting_ci'].includes(prevStatus)) {
-    nextStatus = 'failed';
-    note = 'tmux session ended before PR creation';
+    const lastExitCode = readLastExitCodeFromLog(task.id);
+    if (lastExitCode === 0) {
+      nextStatus = 'done_local';
+      note = 'Local task completed successfully (no PR)';
+    } else {
+      nextStatus = 'failed';
+      note = 'tmux session ended before PR creation';
+    }
   }
 
   task.status = nextStatus;
@@ -123,6 +144,8 @@ for (const task of registry.tasks) {
   if (prevStatus !== nextStatus && task.notifyOnComplete) {
     if (nextStatus === 'done') {
       notify(`✅ ${task.id} done: PR #${task.pr ?? '?'} is ready.`);
+    } else if (nextStatus === 'done_local') {
+      notify(`✅ ${task.id} done_local: task finished successfully without PR.`);
     } else if (nextStatus === 'failed') {
       notify(`⚠️ ${task.id} failed: ${note}`);
     }
