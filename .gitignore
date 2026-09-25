@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# theme-archive skill: Python caches, and the generated archive (cases, data,
+# HTML). The archive is kept out of git by default because this repo is
+# public; remove the /theme-archive/ line to version it here.
+__pycache__/
+/theme-archive/
