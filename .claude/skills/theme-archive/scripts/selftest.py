@@ -16,6 +16,7 @@ import contextlib
 import io
 import json
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -182,6 +183,12 @@ def main(argv=None) -> int:
     cands = read_json(ddir / "candidates.json")["candidates"]
     check(rc == 0 and cands and "收评" not in cands[0]["item"]["title"], "screening ranks catalysts above recaps")
 
+    rc, _ = quiet(stock_lookup.main, ["--manual", "999005", "戊公司", "--pct", "3.5", "--price", "8.8",
+                                     "--source", "selftest", "--date", "2026-09-24"])
+    lk = read_json(ddir / "lookup.json")
+    check(rc == 0 and lk["stocks"]["999005"]["cap"] == "8.80 元 · 9/24 +3.50%"
+          and lk["stocks"]["999005"]["excess"] == 4.72, "manual quote recorded (no float cap) with excess")
+
     print("4. daily finish")
     import daily
     from ta_common import dist_dir
@@ -202,8 +209,12 @@ def main(argv=None) -> int:
         same = html.encode("utf-8") == ref.read_bytes()
         check(same, f"legacy rebuild of {ref.name} is byte-identical ({len(list(out_dir.glob('*.json')))} cases)")
 
-    print(f"\n{'ALL PASSED' if not FAILS else f'{len(FAILS)} FAILED'} (temp archive {tmp})")
-    return 1 if FAILS else 0
+    if FAILS:
+        print(f"\n{len(FAILS)} FAILED (temp archive kept for inspection: {tmp})")
+        return 1
+    shutil.rmtree(tmp, ignore_errors=True)
+    print("\nALL PASSED")
+    return 0
 
 
 if __name__ == "__main__":

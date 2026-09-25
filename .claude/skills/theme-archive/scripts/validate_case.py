@@ -24,8 +24,11 @@ from ta_common import (  # noqa: E402
 )
 
 ADVICE = re.compile(
-    r"建议(买入|卖出|关注|配置|增持|减持)|逢低(买入|布局|吸纳)|买入机会|(择机|可以?|建议|适时|积极)(买入|介入)|加仓|减仓|建仓|清仓|止损|止盈|"
-    r"满仓|半仓|轻仓|重仓|仓位建议|抄底|追涨|低吸|高抛|目标位|看到\s*\d+(\.\d+)?\s*元")
+    # advisory phrasings only; descriptive market language (资金加仓、空头减仓、基金重仓股) is fine
+    r"建议(买入|卖出|关注|配置|增持|减持|加仓|减仓|建仓|清仓|持有)|逢(低|高)(买入|布局|吸纳|加仓|减仓)|买入机会|"
+    r"(择机|可以|可|适时|积极|适当|分批|宜|应当|应)(买入|卖出|介入|加仓|减仓|建仓|清仓)|"
+    r"(设置|设好)?止(损|盈)(位|价|线)|满仓|半仓|轻仓|重仓(配置|参与|买入)|仓位建议|抄底|追涨|低吸|高抛|目标位|"
+    r"看到\s*\d+(\.\d+)?\s*元")
 ALLOWED_TAGS = {"strong", "b", "br", "em", "span"}
 # (min, max) plain-text length; outside -> WARN.  Derived from the reference archive (p5..max).
 LEN = {
@@ -88,6 +91,10 @@ def walk_strings(obj, path=""):
 
 def validate(c: dict, known_ids: set[str], market: dict | None = None, legacy: bool = False) -> Report:
     r = Report(c.get("id", "?"))
+
+    def L(key: str, value: str, where: str) -> None:
+        if not legacy:  # imported reference cases define the ranges; don't re-judge them
+            check_len(r, key, value, where)
     req = ["id", "date", "title", "subtitle", "grade", "driver", "pricing", "mainline", "archiveLevel",
            "positionNote", "pricingDetail", "facts", "timeline", "verdict", "rings", "ringSummary", "assessment",
            "stockTiers", "history", "coreLinks", "extendedLinks", "notInChain", "decisionChain", "scenarios",
@@ -125,7 +132,7 @@ def validate(c: dict, known_ids: set[str], market: dict | None = None, legacy: b
     if not any(f.get("warn") for f in c["facts"]):
         r.warn("facts: no 争议点 card with warn=true")
     for i, f in enumerate(c["facts"]):
-        check_len(r, "fact.value", f.get("value", ""), f"facts[{i}]")
+        L("fact.value", f.get("value", ""), f"facts[{i}]")
     if not c["timeline"]:
         r.err("timeline: at least one entry")
     if [x.get("name") for x in c["rings"]] != RING_NAMES:
@@ -165,11 +172,11 @@ def validate(c: dict, known_ids: set[str], market: dict | None = None, legacy: b
                         r.err(f"{where}: missing {k}")
                 if role in ("情绪小票", "情绪龙") and not s.get("gene"):
                     r.err(f"{where}: emotional tiers need a 题材基因 `gene`")
-            check_len(r, "stock.logic", s.get("logic", ""), where)
+            L("stock.logic", s.get("logic", ""), where)
             if s.get("detail"):
-                check_len(r, "stock.detail", s["detail"], where)
+                L("stock.detail", s["detail"], where)
             if s.get("gene"):
-                check_len(r, "stock.gene", s["gene"], where)
+                L("stock.gene", s["gene"], where)
     if not legacy and not 3 <= n_stocks <= 13:
         r.warn(f"{n_stocks} stock cards (house style 5-11)")
     for s in c["coreLinks"]:
@@ -180,7 +187,7 @@ def validate(c: dict, known_ids: set[str], market: dict | None = None, legacy: b
             if not s.get(k):
                 r.err(f"{where}: missing {k}")
         if s.get("detail"):
-            check_len(r, "core.detail", s["detail"], where)
+            L("core.detail", s["detail"], where)
     for s in c["extendedLinks"]:
         for k in ("detail", "risk"):
             if not s.get(k):
@@ -211,8 +218,39 @@ def validate(c: dict, known_ids: set[str], market: dict | None = None, legacy: b
 
     # ---- lengths of single fields
     for key in ("title", "subtitle", "positionNote", "pricingDetail", "verdict", "ringSummary"):
-        check_len(r, key, c[key], key)
-    check_len(r, "grade.text", g.get("text", ""), "grade.text")
+        L(key, c[key], key)
+    L("grade.text", g.get("text", ""), "grade.text")
+    for x in c["rings"]:
+        for i, p in enumerate(x.get("points", [])):
+            L("ring.point", p, f"ring {x.get('name')}[{i}]")
+    for i, a in enumerate(c["assessment"]):
+        L("assessment", a, f"assessment[{i}]")
+    for i, h in enumerate(c["history"]):
+        L("history", h, f"history[{i}]")
+    for s in c["decisionChain"]:
+        if s.get("name") != "仓位":
+            L("dc.text", s.get("text", ""), f"decisionChain/{s.get('name')}")
+    for i, sc in enumerate(c["scenarios"]):
+        for k in ("trigger", "state", "signal"):
+            L(f"scen.{k}", sc.get(k, ""), f"scenarios[{i}].{k}")
+    for k in ("verify", "falsify"):
+        for i, v in enumerate(c["signals"].get(k, [])):
+            L("sig", v, f"signals.{k}[{i}]")
+    for i, t in enumerate(c["calendar"]):
+        L("cal.what", t.get("what", ""), f"calendar[{i}].what")
+        L("cal.why", t.get("why", ""), f"calendar[{i}].why")
+    for s in c["coreLinks"]:
+        if s.get("confirm"):
+            L("core.confirm", s["confirm"], f"核心/{s.get('name')}")
+    for s in c["extendedLinks"]:
+        if s.get("detail"):
+            L("ext.detail", s["detail"], f"延伸/{s.get('name')}")
+    for s in c["notInChain"]:
+        L("not.logic", s.get("logic", ""), f"不在链上/{s.get('name')}")
+    for t in c["stockTiers"]:
+        for s in t.get("stocks", []):
+            if s.get("risk"):
+                L("stock.risk", s["risk"], f"{t.get('title')}/{s.get('name')}")
 
     # ---- every string: html + compliance
     for path, value in walk_strings(c):
@@ -220,7 +258,7 @@ def validate(c: dict, known_ids: set[str], market: dict | None = None, legacy: b
         if path.startswith("decisionChain[6]") or path in ("id",):
             continue
         m = ADVICE.search(strip_tags(value))
-        if m and not legacy:
+        if m:
             r.err(f"{path}: investment-advice wording `{m.group(0)}` (合规：只写客观条件)")
 
     if r.md_fields:

@@ -24,7 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ta_common import (  # noqa: E402
     ASSETS_DIR, DECISION_STYLE, PREFIX, PRICING, ROLE_DEFAULT_TITLE, TONES, cases_dir, dist_dir,
-    load_cases, md_bold, read_json,
+    load_cases, md_bold, read_json, strip_tags,
 )
 
 PAGE_TITLE = "题材档案库 · 题材档案库"
@@ -68,16 +68,22 @@ def search_text(*parts: str) -> str:
 
 # ------------------------------------------------------------------ quotes
 def fmt_cap(q: dict) -> str:
-    """{'price':12.79,'float_cap':6.38e10,'pct':2.81,'date':'2026-09-16'} -> '12.79 元 · 流通 638 亿 · 9/16 +2.81%'"""
-    fc = q["float_cap"] / 1e8
-    cap = f"{fc / 1e4:.2f} 万亿" if fc >= 1e4 else f"{fc:.0f} 亿"
+    """{'price':12.79,'float_cap':6.38e10,'pct':2.81,'date':'2026-09-16'} -> '12.79 元 · 流通 638 亿 · 9/16 +2.81%'
+
+    Without float_cap (web-sourced quotes) the middle part is dropped: '12.79 元 · 9/16 +2.81%'.
+    """
     y, m, d = q["date"].split("-")
-    return f"{q['price']:.2f} 元 · 流通 {cap} · {int(m)}/{int(d)} {q['pct']:+.2f}%"
+    parts = [f"{q['price']:.2f} 元"]
+    if q.get("float_cap"):
+        fc = q["float_cap"] / 1e8
+        parts.append("流通 " + (f"{fc / 1e4:.2f} 万亿" if fc >= 1e4 else f"{fc:.0f} 亿"))
+    parts.append(f"{int(m)}/{int(d)} {q['pct']:+.2f}%")
+    return " · ".join(parts)
 
 
 def cap_for(stock: dict, opts: Opts) -> str | None:
     q = opts.quotes.get(stock.get("code", ""))
-    if q and q.get("price") and q.get("float_cap"):
+    if q and q.get("price") and q.get("pct") is not None:
         return fmt_cap(q)
     return stock.get("cap")
 
@@ -166,7 +172,7 @@ def render_case(c: dict, all_cases: list[dict], opts: Opts) -> str:
     details_html = ""
     if detail:
         detail = R(detail)
-        n = c.get("pricingDetailChars") if opts.legacy else len(detail)
+        n = c.get("pricingDetailChars") if opts.legacy else len(strip_tags(detail))
         details_html = (f'<details class="more"><summary>展开定价状态详版（{n} 字）</summary>'
                         f'<div class="pos"><b>定价状态备注：</b>{detail}</div></details>')
 

@@ -37,7 +37,12 @@ Use the WebSearch tool and record the source + time in `sources`. Useful queries
 - 个股: `<名称> 9月24日 收盘 涨跌幅 成交额`, `<名称> 2026 半年报 营收 毛利率`, `<名称> 互动平台 产能`
 - 商品/行业: `<品种> 价格 9月24日 生意社`, `<品种> 期货 收盘 9月24日`, `SMM <品种> 报价`
 
-When market numbers come from search snippets rather than the collectors, cross-check each stock's move in two sources where possible, and write the data source as `Web 检索（9/24）` in `sources`. Never invent a number: if a figure cannot be found, write the qualitative fact without it.
+When market numbers come from search snippets rather than the collectors:
+
+- Cross-check each stock's move, and any number that carries the argument, in two sources. Search summaries sometimes garble units or translate them (1690 MW for 1690 万千瓦, "58.00 billion" for 58.00 亿); re-read the unit against the underlying fact.
+- Record every verified stock with `stock_lookup.py --manual CODE 名称 --pct … --price … --index-pct … --source …` so the build fills its quote line and the validator can check the text against it.
+- Write the data source as `Web 检索（9/24）` (or the outlet and time) in `sources`.
+- Never invent a number: if a figure cannot be found, write the qualitative fact without it and say so.
 
 ## Paid terminals
 

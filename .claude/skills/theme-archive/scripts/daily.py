@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import shutil
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -71,7 +72,7 @@ def cmd_status(a) -> int:
     by: dict[str, list] = {}
     for c in cases:
         by.setdefault(c.get("mainline", "?"), []).append(c)
-    for ml, cs in sorted(by.items(), key=lambda kv: -max(c["date"] for c in kv[1])):
+    for ml, cs in sorted(by.items(), key=lambda kv: max(c["date"] for c in kv[1]), reverse=True):
         print(f"\n## {ml} ({len(cs)})")
         for c in sorted(cs, key=lambda c: c["date"], reverse=True):
             last = max([t.get("when", "")[:10] for t in c.get("timeline", [])] + [c["date"]])
@@ -96,10 +97,10 @@ def latest_quotes() -> dict:
         lk = d / "lookup.json"
         if lk.exists():
             for code, v in read_json(lk).get("stocks", {}).items():
-                if v.get("price") and v.get("float_cap") and v.get("pct") is not None:
+                if v.get("price") and v.get("pct") is not None:
                     prev = out.get(code)
                     if not prev or prev["date"] <= v["trade_date"]:
-                        out[code] = {"price": v["price"], "float_cap": v["float_cap"], "pct": v["pct"],
+                        out[code] = {"price": v["price"], "float_cap": v.get("float_cap"), "pct": v["pct"],
                                      "date": v["trade_date"]}
     if not out:
         return {}
@@ -142,6 +143,8 @@ def cmd_finish(a) -> int:
 
 
 def main(argv=None) -> int:
+    if hasattr(signal, "SIGPIPE"):  # `daily.py status | head` should not print a traceback
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare")

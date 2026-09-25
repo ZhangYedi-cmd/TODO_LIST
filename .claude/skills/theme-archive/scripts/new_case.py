@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Scaffold a new case JSON with every section and TODO hints.
 
-    python3 new_case.py <id> --title 标题 [--date YYYY-MM-DD] [--mainline 主线] [--driver 产业周期]
+    python3 new_case.py <id> --title 标题 [--date YYYY-MM-DD] [--mainline 主线] [--driver 产业周期] [--downgrade]
+
+--downgrade scaffolds a 降档 case (methodology §1.1): tone warn, 题材催化级,
+the ⚑ badge, and a 核心环节 card for「（本档无合格主攻标的）」 if nothing qualifies.
 
 Writes cases/<id>.json (refuses to overwrite).  Replace every "TODO…" string;
 validate_case.py fails while any remain.  Field meanings: references/case-schema.md.
@@ -14,7 +17,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ta_common import DECISION_STEPS, DECISION_STYLE, POSITION_STEP_TEXT, cases_dir, today_cn, write_json  # noqa: E402
+from ta_common import (  # noqa: E402
+    DECISION_STEPS, DECISION_STYLE, DOWNGRADE_BADGE, POSITION_STEP_TEXT, cases_dir, today_cn, write_json,
+)
 
 
 def stock(role: str) -> dict:
@@ -43,6 +48,7 @@ def main(argv=None) -> int:
     ap.add_argument("--date", default=None)
     ap.add_argument("--mainline", default="TODO 主线（沿用已有主线名，或新建）")
     ap.add_argument("--driver", default="产业周期", help="产业周期|地缘冲突|政策驱动|证伪型|映射型")
+    ap.add_argument("--downgrade", action="store_true", help="降档入库: passes 精确数字/可证伪 but fails 预期差 or A股映射")
     args = ap.parse_args(argv)
 
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", args.id):
@@ -113,6 +119,16 @@ def main(argv=None) -> int:
         "calendar": [{"when": "TODO", "what": "TODO", "why": "TODO"} for _ in range(4)],
         "sources": "TODO 来源(时间) ｜ 来源(时间) ｜ …",
     }
+    if args.downgrade:
+        case["archiveLevel"] = "降档"
+        case["downgradeBadge"] = DOWNGRADE_BADGE
+        case["grade"] = {"tone": "warn", "text": "⚠ 题材催化级 · TODO 为什么降档（预期差已被抹平 / A 股映射缺失）"}
+        case["decisionChain"][0]["text"] = "TODO <strong>题材催化级</strong>（降档）：……。基准参照：……"
+        case["coreLinks"].insert(0, {
+            "name": "（本档无合格主攻标的）", "code": "—", "tag": "TODO 为什么没有合格标的",
+            "logic": "产业地位 | — | 弹性来源 | — | 约束条件 | TODO",
+            "detail": "TODO 若确无主营相关的 A 股公司，保留这张卡并写明原因；若有，删除这张卡",
+            "confirm": "TODO 什么情况下可升级为正式档", "risk": "TODO 强行映射会产生什么误判"})
     write_json(path, case)
     print(f"scaffolded {path}")
     return 0

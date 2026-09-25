@@ -12,6 +12,13 @@ strings:
 Data: data/YYYYMMDD/quotes.json + market.json when collect_market.py ran,
 otherwise live Eastmoney K-lines.  Results are cached to data/YYYYMMDD/lookup.json,
 which validate_case.py and build_archive.py also read.
+
+Fallback mode (hosts blocked): record numbers you verified via web search so the
+build and the validator can use them exactly like fetched data:
+
+    python3 stock_lookup.py --manual 601218 吉鑫科技 --pct 10.03 --price 6.25 \
+        [--float-cap 61.2 (亿)] [--amount 9.8 (亿)] [--turnover 16.1] --index-pct -1.22 \
+        --source "21财经 9/24" --date 2026-09-24
 """
 from __future__ import annotations
 
@@ -74,18 +81,54 @@ def fmt_amount(yuan: float | None) -> str:
     return f"{yi:.2f} 亿" if yi < 10 else f"{yi:.1f} 亿"
 
 
-def fmt_cap(price: float, float_cap: float, day: str, pct: float) -> str:
-    fc = float_cap / 1e8
-    cap = f"{fc / 1e4:.2f} 万亿" if fc >= 1e4 else f"{fc:.0f} 亿"
-    return f"{price:.2f} 元 · 流通 {cap} · {md(day)} {pct:+.2f}%"
+def fmt_cap(price: float, float_cap: float | None, day: str, pct: float) -> str:
+    parts = [f"{price:.2f} 元"]
+    if float_cap:
+        fc = float_cap / 1e8
+        parts.append("流通 " + (f"{fc / 1e4:.2f} 万亿" if fc >= 1e4 else f"{fc:.0f} 亿"))
+    parts.append(f"{md(day)} {pct:+.2f}%")
+    return " · ".join(parts)
+
+
+def record_manual(args, td: str, cache: dict, cache_path: Path) -> int:
+    code, name = args.terms[0], args.terms[1] if len(args.terms) > 1 else args.terms[0]
+    if not re.fullmatch(r"\d{6}", code) or args.pct is None:
+        print("--manual needs: CODE NAME --pct X (and ideally --price, --index-pct, --source)")
+        return 2
+    idx = args.index_pct if args.index_pct is not None else cache.get("index_pct")
+    if args.index_pct is not None:
+        cache["index_pct"] = args.index_pct
+    fcap = args.float_cap * 1e8 if args.float_cap else None
+    rec = {"code": code, "name": name, "trade_date": td, "price": args.price, "pct": args.pct,
+           "excess": round(args.pct - idx, 2) if idx is not None else None,
+           "amount": args.amount * 1e8 if args.amount else None, "turnover": args.turnover,
+           "float_cap": fcap, "source": f"manual: {args.source or 'web search'}", "path": []}
+    rec["cap"] = fmt_cap(args.price, fcap, td, args.pct) if args.price else None
+    parts = [f"超额 {rec['excess']:+.2f}pct" if rec["excess"] is not None else None,
+             f"成交 {fmt_amount(rec['amount'])}" if rec["amount"] else None,
+             f"换手 {args.turnover:.2f}%" if args.turnover is not None else None]
+    price = f"{args.price:.2f} 元 " if args.price else ""
+    rec["phrase"] = f"{name} {price}{args.pct:+.2f}%（{'，'.join(p for p in parts if p)}）"
+    cache["stocks"][code] = rec
+    write_json(cache_path, cache)
+    print(f"recorded {rec['phrase']}" + (f"\n    cap: {rec['cap']}" if rec["cap"] else ""))
+    return 0
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("terms", nargs="+", help="stock names or 6-digit codes")
+    ap.add_argument("terms", nargs="+", help="stock names or 6-digit codes (with --manual: CODE NAME)")
     ap.add_argument("--date", default=None, help="report date (default today CST); uses its last trading day")
     ap.add_argument("--days", type=int, default=5, help="daily moves to show (default 5)")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--manual", action="store_true", help="record web-verified numbers instead of fetching")
+    ap.add_argument("--pct", type=float, help="--manual: day pct change")
+    ap.add_argument("--price", type=float, help="--manual: close price (元)")
+    ap.add_argument("--float-cap", type=float, help="--manual: float market cap in 亿")
+    ap.add_argument("--amount", type=float, help="--manual: turnover amount in 亿")
+    ap.add_argument("--turnover", type=float, help="--manual: turnover rate %%")
+    ap.add_argument("--index-pct", type=float, help="--manual: 上证 pct for the day (stored once per day)")
+    ap.add_argument("--source", help="--manual: where the numbers came from")
     args = ap.parse_args(argv)
 
     day = args.date or today_cn()
@@ -96,6 +139,8 @@ def main(argv=None) -> int:
     zt = {s["code"]: s for s in market.get("limit_up", [])}
     cache_path = ddir / "lookup.json"
     cache = read_json(cache_path) if cache_path.exists() else {"trade_date": td, "stocks": {}}
+    if args.manual:
+        return record_manual(args, td, cache, cache_path)
 
     idx_pct = ((market.get("indices") or {}).get("上证指数") or {}).get("pct")
     results, errors = [], []
