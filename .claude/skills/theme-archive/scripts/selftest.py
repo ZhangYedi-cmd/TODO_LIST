@@ -6,7 +6,9 @@
 1. validator accepts the sample case and rejects a fresh scaffold (TODOs)
 2. renderer emits every section, fills quote lines, keeps the fixed markup
 3. collectors / lookup / screening parse canned API payloads correctly
-4. with --reference: import -> legacy build reproduces the file byte for byte
+4. daily finish validates and builds
+5. MCP client: handshake, JSON + SSE replies, pagination, tool calls, errors (local fake server)
+6. with --reference: import -> legacy build reproduces the file byte for byte
 No network needed; everything runs in a temp archive.
 """
 from __future__ import annotations
@@ -99,6 +101,68 @@ def fake_http_json(url: str, params=None, **kw):
         return {"announcements": [{"secCode": "999001", "secName": "甲公司", "announcementTitle": "关于产品价格调整的公告",
                                    "announcementTime": 1758704400000, "adjunctUrl": "x.PDF"}], "hasMore": False}
     raise AssertionError(f"unexpected url {url}")
+
+
+def fake_mcp_server(token: str):
+    """Local streamable-HTTP MCP server: session id, JSON and SSE replies, paginated tools/list, 401."""
+    import http.server
+    import threading
+
+    tools = [{"name": "get_quote", "description": "行情", "inputSchema": {"type": "object",
+              "properties": {"code": {"type": "string"}}, "required": ["code"]}},
+             {"name": "get_kline", "inputSchema": {"type": "object", "properties": {}}},
+             {"name": "get_news", "inputSchema": {"type": "object", "properties": {}}}]
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def send(self, code, body=b"", ctype="application/json", extra=None):
+            self.send_response(code)
+            if body:
+                self.send_header("Content-Type", ctype)
+            for k, v in (extra or {}).items():
+                self.send_header(k, v)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_DELETE(self):
+            self.send(200)
+
+        def do_POST(self):
+            msg = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            if self.headers.get("Authorization") != token:
+                return self.send(401, b'{"error": "invalid token"}')
+            method, mid = msg.get("method"), msg.get("id")
+
+            def reply(result):
+                return json.dumps({"jsonrpc": "2.0", "id": mid, "result": result}, ensure_ascii=False).encode()
+
+            if method == "initialize":
+                return self.send(200, reply({"protocolVersion": "2025-03-26", "capabilities": {"tools": {}},
+                                             "serverInfo": {"name": "fake-ifind", "version": "0.1"}}),
+                                 extra={"Mcp-Session-Id": "sess-1"})
+            if self.headers.get("Mcp-Session-Id") != "sess-1" or self.headers.get("MCP-Protocol-Version") != "2025-03-26":
+                return self.send(400, b'{"error": "no session"}')
+            if method == "notifications/initialized":
+                return self.send(202)
+            if method == "tools/list" and not (msg.get("params") or {}).get("cursor"):
+                note = json.dumps({"jsonrpc": "2.0", "method": "notifications/message", "params": {"data": "hi"}})
+                page = reply({"tools": tools[:2], "nextCursor": "p2"}).decode()
+                body = f"event: message\ndata: {note}\n\nevent: message\ndata: {page}\n\n".encode()
+                return self.send(200, body, "text/event-stream")
+            if method == "tools/list":
+                return self.send(200, reply({"tools": tools[2:]}))
+            if method == "tools/call" and msg["params"]["name"] == "get_quote":
+                text = json.dumps({"code": msg["params"]["arguments"]["code"], "close": 12.43}, ensure_ascii=False)
+                return self.send(200, reply({"content": [{"type": "text", "text": text}], "isError": False}))
+            err = {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": "unknown tool"}}
+            return self.send(200, json.dumps(err).encode())
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
 
 
 def main(argv=None) -> int:
@@ -199,8 +263,42 @@ def main(argv=None) -> int:
     check(rc == 0 and built.exists() and (dist_dir() / "题材档案库_20260924.html").exists(), "finish validates and builds")
     check("12.43 元 · 流通 638 亿 · 9/24 -1.51%" in built.read_text(encoding="utf-8"), "finish refreshes quote lines")
 
+    print("5. MCP client")
+    import mcp_client
+    os.environ["SELFTEST_MCP_TOKEN"] = "tok-123"
+    os.environ.pop("SELFTEST_MCP_UNSET", None)
+    for var in ("no_proxy", "NO_PROXY"):
+        os.environ[var] = ",".join(filter(None, ["127.0.0.1,localhost", os.environ.get(var)]))
+    srv = fake_mcp_server("tok-123")
+    url = f"http://127.0.0.1:{srv.server_address[1]}/ds-mcp-servers/fake"
+    cfg = str(tmp / "mcp.json")
+    write_json(cfg, {"mcpServers": {
+        "fake": {"type": "streamablehttp", "url": url, "headers": {"Authorization": "${SELFTEST_MCP_TOKEN}"}},
+        "badtoken": {"type": "http", "url": url, "headers": {"Authorization": "wrong"}},
+        "unset": {"type": "http", "url": url, "headers": {"Authorization": "${SELFTEST_MCP_UNSET}"}},
+        "closed": {"type": "http", "url": "http://127.0.0.1:9/mcp"}}})
+    catalog = tmp / "mcp_tools.json"
+    rc, out = quiet(mcp_client.main, ["--config", cfg, "probe", "fake", "--out", str(catalog)])
+    cat = read_json(catalog) if catalog.exists() else {}
+    check(rc == 0 and [t["name"] for t in cat.get("fake", {}).get("tools", [])] == ["get_quote", "get_kline", "get_news"],
+          "probe: handshake, SSE reply, paginated tools/list")
+    check(cat.get("fake", {}).get("protocol") == "2025-03-26" and cat["fake"]["server"]["name"] == "fake-ifind",
+          "probe: negotiated protocol and server info recorded")
+    rc, out = quiet(mcp_client.main, ["--config", cfg, "call", "fake", "get_quote", '{"code": "999001.SH"}'])
+    check(rc == 0 and '"close": 12.43' in out and "999001.SH" in out, "call: tool result printed")
+    rc, out = quiet(mcp_client.main, ["--config", cfg, "call", "fake", "nope"])
+    check(rc == 1 and "unknown tool" in out, "call: JSON-RPC error reported")
+    rc, out = quiet(mcp_client.main, ["--config", cfg, "probe", "badtoken"])
+    check(rc == 4 and "AUTH FAILED" in out, "probe: rejected token -> exit 4")
+    rc, out = quiet(mcp_client.main, ["--config", cfg, "probe", "unset"])
+    check(rc == 1 and "SELFTEST_MCP_UNSET" in out, "probe: missing environment variable named")
+    rc, out = quiet(mcp_client.main, ["--config", cfg, "probe", "closed"])
+    check(rc == 2 and "UNREACHABLE" in out, "probe: unreachable host -> exit 2")
+    srv.shutdown()
+    srv.server_close()
+
     if args.reference:
-        print("5. round-trip against reference")
+        print("6. round-trip against reference")
         ref = Path(args.reference)
         out_dir = tmp / "roundtrip"
         import import_html

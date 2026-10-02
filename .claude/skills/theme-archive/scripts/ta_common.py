@@ -215,6 +215,13 @@ class NetworkBlocked(RuntimeError):
     """Raised when an egress proxy / firewall refuses the host."""
 
 
+def ssl_context():
+    """Default TLS context that also trusts SSL_CERT_FILE / REQUESTS_CA_BUNDLE (e.g. an egress proxy CA)."""
+    import ssl
+    cafile = os.environ.get("SSL_CERT_FILE") or os.environ.get("REQUESTS_CA_BUNDLE")
+    return ssl.create_default_context(cafile=cafile) if cafile and os.path.exists(cafile) else ssl.create_default_context()
+
+
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
@@ -223,7 +230,6 @@ def http_get(url: str, *, params: dict | None = None, headers: dict | None = Non
              timeout: float = 15, retries: int = 2, encoding: str | None = None) -> str:
     """GET (or form POST when data is given) with retries; honours HTTPS_PROXY and SSL_CERT_FILE."""
     import gzip
-    import ssl
     import time
     import urllib.error
     import urllib.parse
@@ -235,8 +241,7 @@ def http_get(url: str, *, params: dict | None = None, headers: dict | None = Non
     body = urllib.parse.urlencode(data).encode() if data is not None else None
     hdrs = {"User-Agent": UA, "Accept": "*/*", "Accept-Encoding": "gzip, deflate", "Accept-Language": "zh-CN,zh;q=0.9"}
     hdrs.update(headers or {})
-    cafile = os.environ.get("SSL_CERT_FILE") or os.environ.get("REQUESTS_CA_BUNDLE")
-    ctx = ssl.create_default_context(cafile=cafile) if cafile and os.path.exists(cafile) else ssl.create_default_context()
+    ctx = ssl_context()
     last: Exception | None = None
     for attempt in range(retries + 1):
         try:

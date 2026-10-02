@@ -1,0 +1,81 @@
+{
+  "mcpServers": {
+    "hexin-ifind-ds-mcp": {
+      "type": "http",
+      "url": "https://api-mcp.51ifind.com:8643/ds-mcp-servers/hexin-ifind-ds-mcp",
+      "headers": {
+        "Authorization": "${IFIND_MCP_TOKEN}"
+      }
+    },
+    "kuaicha-enterprise-mcp": {
+      "type": "http",
+      "url": "https://api-mcp.51ifind.com:8643/ds-mcp-servers/kuaicha-enterprise-mcp",
+      "headers": {
+        "Authorization": "${IFIND_MCP_TOKEN}"
+      }
+    },
+    "hexin-law-mcp": {
+      "type": "http",
+      "url": "https://api-mcp.51ifind.com:8643/ds-mcp-servers/hexin-law-mcp",
+      "headers": {
+        "Authorization": "${IFIND_MCP_TOKEN}"
+      }
+    },
+    "hexin-ifind-ds-stock-mcp": {
+      "type": "http",
+      "url": "https://api-mcp.51ifind.com:8643/ds-mcp-servers/hexin-ifind-ds-stock-mcp",
+      "headers": {
+        "Authorization": "${IFIND_MCP_TOKEN}"
+      }
+    },
+    "hexin-ifind-ds-fund-mcp": {
+      "type": "http",
+      "url": "https://api-mcp.51ifind.com:8643/ds-mcp-servers/hexin-ifind-ds-fund-mcp",
+      "headers": {
+        "Authorization": "${IFIND_MCP_TOKEN}"
+      }
+    },
+    "hexin-ifind-ds-edb-mcp": {
+      "type": "http",
+      "url": "https://api-mcp.51ifind.com:8643/ds-mcp-servers/hexin-ifind-ds-edb-mcp",
+      "headers": {
+        "Authorization": "${IFIND_MCP_TOKEN}"
+      }
+    },
+    "hexin-ifind-ds-news-mcp": {
+      "type": "http",
+      "url": "https://api-mcp.51ifind.com:8643/ds-mcp-servers/hexin-ifind-ds-news-mcp",
+      "headers": {
+        "Authorization": "${IFIND_MCP_TOKEN}"
+      }
+    },
+    "hexin-ifind-ds-bond-mcp": {
+      "type": "http",
+      "url": "https://api-mcp.51ifind.com:8643/ds-mcp-servers/hexin-ifind-ds-bond-mcp",
+      "headers": {
+        "Authorization": "${IFIND_MCP_TOKEN}"
+      }
+    },
+    "hexin-ifind-ds-global-stock-mcp": {
+      "type": "http",
+      "url": "https://api-mcp.51ifind.com:8643/ds-mcp-servers/hexin-ifind-ds-global-stock-mcp",
+      "headers": {
+        "Authorization": "${IFIND_MCP_TOKEN}"
+      }
+    },
+    "hexin-ifind-ds-index-mcp": {
+      "type": "http",
+      "url": "https://api-mcp.51ifind.com:8643/ds-mcp-servers/hexin-ifind-ds-index-mcp",
+      "headers": {
+        "Authorization": "${IFIND_MCP_TOKEN}"
+      }
+    },
+    "hexin-ifind-ds-futures-mcp": {
+      "type": "http",
+      "url": "https://api-mcp.51ifind.com:8643/ds-mcp-servers/hexin-ifind-ds-futures-mcp",
+      "headers": {
+        "Authorization": "${IFIND_MCP_TOKEN}"
+      }
+    }
+  }
+}

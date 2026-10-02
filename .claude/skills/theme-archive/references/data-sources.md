@@ -44,6 +44,21 @@ When market numbers come from search snippets rather than the collectors:
 - Write the data source as `Web 检索（9/24）` (or the outlet and time) in `sources`.
 - Never invent a number: if a figure cannot be found, write the qualitative fact without it and say so.
 
-## Paid terminals
+## iFinD MCP (paid)
 
-The reference archive used iFinD for 盘面 data. If you have iFinD / Wind / Tushare Pro, write their output into the same `quotes.json` / `market.json` shapes (see `collect_market.py` for field names) and every other script works unchanged.
+The reference archive used iFinD for 盘面 data. The repo's `.mcp.json` registers the 同花顺 iFinD data servers (streamable HTTP, `https://api-mcp.51ifind.com:8643/ds-mcp-servers/<name>`): `hexin-ifind-ds-mcp`, `hexin-ifind-ds-{stock,index,news,edb,futures,fund,bond,global-stock}-mcp`, `kuaicha-enterprise-mcp` and `hexin-law-mcp`. The names suggest the coverage; `probe` shows the actual tools.
+
+Setup (once per environment):
+
+1. Store the token as the environment variable `IFIND_MCP_TOKEN` in the environment settings. All the servers share it. `.mcp.json` only references `${IFIND_MCP_TOKEN}`, so the token never enters git.
+2. Allow `api-mcp.51ifind.com` (port 8643) in the network settings. Sessions started afterwards load the servers as MCP tools; `.claude/settings.json` pre-approves them.
+
+Check and explore with the stdlib client (`S=.claude/skills/theme-archive/scripts`):
+
+```bash
+python3 $S/mcp_client.py probe --out mcp_tools.json        # every server: handshake + tool list; exit 0 ok, 2 host blocked, 4 token rejected
+python3 $S/mcp_client.py tools hexin-ifind-ds-stock-mcp    # one server's tools and parameters (* = required)
+python3 $S/mcp_client.py call <server> <tool> '{"arg": "value"}'
+```
+
+Until the iFinD tools are mapped into `collect_market.py` / `stock_lookup.py`, use them during research (step 3) for 盘面 numbers and record each stock with `stock_lookup.py --manual … --source "iFinD M/D"`. Wind or Tushare Pro output can likewise be written into the `quotes.json` / `market.json` shapes (see `collect_market.py` for field names) and every other script works unchanged.

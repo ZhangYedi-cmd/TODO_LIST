@@ -1,0 +1,15 @@
+{
+  "enabledMcpjsonServers": [
+    "hexin-ifind-ds-mcp",
+    "kuaicha-enterprise-mcp",
+    "hexin-law-mcp",
+    "hexin-ifind-ds-stock-mcp",
+    "hexin-ifind-ds-fund-mcp",
+    "hexin-ifind-ds-edb-mcp",
+    "hexin-ifind-ds-news-mcp",
+    "hexin-ifind-ds-bond-mcp",
+    "hexin-ifind-ds-global-stock-mcp",
+    "hexin-ifind-ds-index-mcp",
+    "hexin-ifind-ds-futures-mcp"
+  ]
+}
